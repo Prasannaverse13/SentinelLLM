@@ -1,4 +1,3 @@
-
 # 🧠 SentinelLLM — AI That Watches Your AI
 
 **SentinelLLM** is an enterprise-grade SRE (Site Reliability Engineering) observability platform designed to solve the "Black Box" problem of Large Language Models. It provides a specialized observability layer that monitors your production LLM fleet for performance drift, cost overruns, and quality degradation.
@@ -16,12 +15,12 @@ graph TD
     subgraph "Intelligent Monitoring Layer"
         Evaluator -->|Hallucination Score| Bridge
         Evaluator -->|Root Cause Analysis| Bridge
-    </div>
+    end
 
     subgraph "Observability Backend"
         Bridge -->|Metrics/Logs| Datadog[Datadog US3 Cloud]
         Bridge -->|Events| GCP[Google Cloud Platform]
-    </div>
+    end
 
     Datadog -->|Visualization| Dashboard[Sentinel Dashboard]
 ```
