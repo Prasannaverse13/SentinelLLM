@@ -1,0 +1,5 @@
+{
+  "name": "Copy of SentinelLLM",
+  "description": "Enterprise-grade SRE observability for LLM applications. Monitor costs, latency, and hallucinations with Gemini-powered root cause analysis and Datadog-style dashboards.",
+  "requestFramePermissions": []
+}
