@@ -1,9 +1,9 @@
 
 import { TelemetryPoint, Incident, SLOData } from '../types';
 
-// Datadog Credentials provided by the user
-const DD_API_KEY = '98ae635b0355dbbc5945db5df5646e91'; 
-const DD_APP_KEY = 'f3ae4e00b6382e42cec4eb49d51b64b6a37388b9';
+// Datadog Credentials retrieved from environment
+const DD_API_KEY = process.env.DATADOG_API_KEY; 
+const DD_APP_KEY = process.env.DATADOG_APP_KEY;
 const DD_SITE = 'us3.datadoghq.com'; 
 
 const PROXIES = [
@@ -39,8 +39,15 @@ class DatadogBridge {
     this.logListeners.forEach(l => l(message));
   }
 
+  private isSimulationMode(): boolean {
+    return !DD_API_KEY || !DD_APP_KEY;
+  }
+
   private async transmit(url: string, payload: any, label: string): Promise<boolean> {
-    // We use the provided DD_API_KEY which is now hardcoded as per user request
+    if (this.isSimulationMode()) {
+      return true; // Silent success in simulation mode
+    }
+
     const authUrl = `${url}${url.includes('?') ? '&' : '?'}api_key=${DD_API_KEY}&application_key=${DD_APP_KEY}`;
     
     for (let i = 0; i < PROXIES.length; i++) {
@@ -52,8 +59,8 @@ class DatadogBridge {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'DD-API-KEY': DD_API_KEY,
-            'DD-APPLICATION-KEY': DD_APP_KEY
+            'DD-API-KEY': DD_API_KEY!,
+            'DD-APPLICATION-KEY': DD_APP_KEY!
           },
           body: JSON.stringify(payload),
         });
@@ -67,7 +74,6 @@ class DatadogBridge {
       }
     }
 
-    // Fallback if proxies fail or block
     try {
       await fetch(authUrl, {
         method: 'POST',
@@ -77,7 +83,7 @@ class DatadogBridge {
       });
       return true; 
     } catch (e) {
-      this.writeLog(`> BRIDGE_CRITICAL: ${label} blocked by browser`);
+      this.writeLog(`> BRIDGE_CRITICAL: ${label} transmission blocked`);
       return false;
     }
   }
@@ -93,28 +99,40 @@ class DatadogBridge {
     ];
 
     this.writeLog(`> BOOT_SEQUENCE: Sentinel Kernel v3.0.3`);
-    this.writeLog(`> AUTH: Enterprise Datadog Credentials Loaded.`);
-    this.writeLog(`> BRIDGE: Initializing High-Resilience Tunnel to ${DD_SITE}...`);
+    
+    if (this.isSimulationMode()) {
+      this.writeLog(`! WARNING: DATADOG_API_KEY not found. Operating in Simulation Mode.`);
+    } else {
+      this.writeLog(`> AUTH: Enterprise Datadog Credentials Loaded.`);
+    }
+
+    this.writeLog(`> BRIDGE: Initializing High-Resilience Tunnel...`);
     
     for (const metric of metrics) {
-      const payload = {
-        series: [{
-          metric,
-          points: [[ts, 0]],
-          type: 'gauge',
-          tags: ['env:production', 'service:sentinel-v3', 'source:web-bridge']
-        }]
-      };
-      
-      const ok = await this.transmit(`https://api.${DD_SITE}/api/v1/series`, payload, metric);
-      this.writeLog(`> HANDSHAKE [${metric}]: ${ok ? '202_ACCEPTED' : 'ERR_TIMEOUT'}`);
-      this.updateStatus(metric.split('.').pop() || 'init', ok ? 'SYNCED' : 'ERR', ok ? '202' : 'FAIL');
-      results.push(`> ${metric}... [${ok ? '202' : 'FAIL'}]`);
+      if (this.isSimulationMode()) {
+        this.writeLog(`> BRIDGE_ERR: DATADOG_API_KEY is missing in environment`);
+        this.writeLog(`> HANDSHAKE [${metric}]: SIMULATED`);
+        this.updateStatus(metric.split('.').pop() || 'init', 'SIMULATED', 'SIM');
+        results.push(`> ${metric}... [SIMULATED]`);
+      } else {
+        const payload = {
+          series: [{
+            metric,
+            points: [[ts, 0]],
+            type: 'gauge',
+            tags: ['env:production', 'service:sentinel-v3', 'source:web-bridge']
+          }]
+        };
+        const ok = await this.transmit(`https://api.${DD_SITE}/api/v1/series`, payload, metric);
+        this.writeLog(`> HANDSHAKE [${metric}]: ${ok ? '202_ACCEPTED' : 'ERR_TIMEOUT'}`);
+        this.updateStatus(metric.split('.').pop() || 'init', ok ? 'SYNCED' : 'ERR', ok ? '202' : 'FAIL');
+        results.push(`> ${metric}... [${ok ? '202' : 'FAIL'}]`);
+      }
       await new Promise(r => setTimeout(r, 150));
     }
 
     this.writeLog(`> KERNEL_STATUS: ONLINE`);
-    this.writeLog(`> DD_US3_TUNNEL: ACTIVE`);
+    this.writeLog(`> DD_US3_TUNNEL: ${this.isSimulationMode() ? 'SIMULATED' : 'ACTIVE'}`);
     this.notify();
     return results;
   }
@@ -127,6 +145,8 @@ class DatadogBridge {
   }
 
   private async emit(point: TelemetryPoint) {
+    if (this.isSimulationMode()) return;
+
     const ts = Math.floor(Date.now() / 1000);
     const tags = [
       'service:sentinel-v3',
@@ -218,12 +238,14 @@ class DatadogBridge {
     this.notify();
     this.writeLog(`! ALERT: ${title}`);
 
-    await this.transmit(`https://api.${DD_SITE}/api/v1/events`, {
-      title: `[SENTINEL] ${title}`,
-      text: `${context}\n\nSignal Data: ${signal_data || 'N/A'}`,
-      tags: ['service:sentinel-v3', `severity:${severity}`],
-      alert_type: severity === 'critical' ? 'error' : 'warning'
-    }, 'Event');
+    if (!this.isSimulationMode()) {
+      await this.transmit(`https://api.${DD_SITE}/api/v1/events`, {
+        title: `[SENTINEL] ${title}`,
+        text: `${context}\n\nSignal Data: ${signal_data || 'N/A'}`,
+        tags: ['service:sentinel-v3', `severity:${severity}`],
+        alert_type: severity === 'critical' ? 'error' : 'warning'
+      }, 'Event');
+    }
   }
 
   getSLOs(): SLOData[] {
@@ -266,8 +288,7 @@ class DatadogBridge {
   getTelemetry() { return [...this.telemetry].reverse(); }
   getIncidents() { return [...this.incidents]; }
   getSyncStatus() { return { ...this.syncLog }; }
-  getApiKey() { return DD_API_KEY; }
-
+  
   resolveIncident(id: string) {
     this.incidents = this.incidents.map(inc => inc.id === id ? { ...inc, status: 'resolved' as const } : inc);
     this.writeLog(`> Incident resolved.`);
