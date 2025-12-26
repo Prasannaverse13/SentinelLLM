@@ -60,6 +60,10 @@ The dashboard provides an in-Datadog style view that aggregates:
 *   **Incident Feed**: Real-time status of detection rule breaches.
 *   **Blueprint Guide**: A documentation section (`components/Dashboard.tsx`) that gives SREs the exact Datadog JSON configurations to replicate these views in the native Datadog UI.
 
+  <img width="1920" height="1080" alt="Screenshot (1594)" src="https://github.com/user-attachments/assets/54db5688-1521-435e-a753-e2b97bb3fa29" />
+
+  <img width="1920" height="1080" alt="Screenshot (1595)" src="https://github.com/user-attachments/assets/e71d1557-ae91-423c-90be-b0b3428f4fea" />
+
 ---
 
 ## 🧠 Gemini & Vertex AI Integration
@@ -69,6 +73,8 @@ SentinelLLM leverages Google Gemini not just as a chatbot, but as an **Autonomou
 *   **Model Host**: All inference is powered by `gemini-3-flash-preview` and `gemini-3-pro-preview`.
 *   **Evaluation Engine**: (`services/geminiService.ts`) uses a supervisor pattern where a lightweight Gemini model "watches" the primary model's output to calculate hallucination scores.
 *   **Root Cause Analysis (RCA)**: When an incident occurs, the `analyzeRootCause` service sends the failure context to Gemini 3 Pro to determine if the failure was due to context window overflow, prompt injection, or infra latency.
+  
+<img width="1920" height="1080" alt="Screenshot (1592)" src="https://github.com/user-attachments/assets/83cd2cfd-92a1-48b6-90ac-bc976464b3c5" />
 
 ---
 
